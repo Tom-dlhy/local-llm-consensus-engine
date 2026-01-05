@@ -16,6 +16,7 @@ from src.models import (
     ReviewRanking,
     ReviewResult,
     SessionStage,
+    StageLatencyStats,
     StageTokenUsage,
     TokenUsage,
 )
@@ -179,6 +180,13 @@ class CouncilService:
         )
         self._update_total_usage(session)
 
+        # Calculate latency stats for Stage 1
+        session.latency_stats.stage1_opinions = self._calculate_stage_latency(
+            stage="opinions",
+            items=opinions,
+        )
+        self._update_total_latency(session)
+
         session.updated_at = datetime.now()
         return opinions
 
@@ -300,6 +308,13 @@ class CouncilService:
         )
         self._update_total_usage(session)
 
+        # Calculate latency stats for Stage 2
+        session.latency_stats.stage2_review = self._calculate_stage_latency(
+            stage="review",
+            items=reviews,
+        )
+        self._update_total_latency(session)
+
         session.updated_at = datetime.now()
         return reviews
 
@@ -328,6 +343,8 @@ class CouncilService:
             own_agent_id=own_agent_id,
         )
 
+        start_time = datetime.now()
+
         if worker_url:
             response = await self._call_worker(
                 worker_url=worker_url,
@@ -353,6 +370,8 @@ class CouncilService:
         # Parse JSON response
         rankings = self._parse_review_response(raw_content, own_agent_id)
 
+        duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+
         return ReviewResult(
             reviewer_id=reviewer_id,
             reviewer_name=reviewer_name,
@@ -360,6 +379,7 @@ class CouncilService:
             rankings=rankings,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            duration_ms=duration_ms,
         )
 
     def _parse_review_response(
@@ -468,6 +488,14 @@ class CouncilService:
             },
         )
         self._update_total_usage(session)
+
+        # Calculate latency stats for Stage 3
+        session.latency_stats.stage3_synthesis = StageLatencyStats(
+            stage="synthesis",
+            total_duration_ms=duration_ms,
+            by_model={model: duration_ms},
+        )
+        self._update_total_latency(session)
 
         session.update_stage(SessionStage.COMPLETE)
         return final_answer
@@ -587,6 +615,61 @@ class CouncilService:
         session.token_usage.total_prompt_tokens = total_prompt
         session.token_usage.total_completion_tokens = total_completion
         session.token_usage.total_tokens = total_prompt + total_completion
+
+    def _calculate_stage_latency(
+        self,
+        stage: str,
+        items: list[AgentResponse] | list[ReviewResult],
+    ) -> StageLatencyStats:
+        """Calculate aggregated latency stats for a stage."""
+        by_model: dict[str, int] = {}
+        total_duration = 0
+
+        for item in items:
+            model = getattr(item, "model", "unknown")
+            duration = getattr(item, "duration_ms", 0)
+
+            total_duration += duration
+            # For parallel stages (Opnions, Review), we might want MAX duration for "stage duration",
+            # but for "Latency per model" we sum up per model.
+            # The user asked for "Latency per model", so we sum per model.
+            # But the "Total" for the stage usually means wall-clock time for the stage.
+            # However, here we are aggregating metrics.
+            # If multiple agents run in parallel, the stage duration is max(agent_durations).
+            # But here `total_duration_ms` in `StageLatencyStats` likely refers to sum of computing time?
+            # Or the user wants to see the total wait time?
+            # "J'ai besoin de connaitre le temps de l'attence de chaque modèle" -> Latency per model.
+            # Let's sum per model.
+
+            by_model[model] = (by_model.get(model, 0) + duration)
+
+        # For the stage total, if we want to show "Latency per model",
+        # the total might be less relevant than the max if it's parallel.
+        # But let's stick to summing for now as a "total compute time" metric,
+        # or maybe we should calculate the max for the stage duration?
+        # The user visualizes it as a Bar Plot per model.
+        # Let's just track the sum of all durations for now as "total_duration_ms"
+        # but keep in mind that for parallel execution, wall clock is different.
+        # Given the "Summary" tab request "juste le temps de l'attence end-to-end",
+        # that will be tracked at the session level separately or summed here.
+        # Let's just sum it here for consistency with token usage.
+
+        return StageLatencyStats(
+            stage=stage,
+            total_duration_ms=total_duration,
+            by_model=by_model,
+        )
+
+    def _update_total_latency(self, session: CouncilSession) -> None:
+        """Update total session duration."""
+        # For the total session duration, we should strictly compare start/end times of the session,
+        # but since we are building it incrementally, and we want "End-to-End",
+        # we can approximate it by summing stage MAX durations or just taking (now - created_at).
+        # Actually, taking (now - created_at) is the most accurate definition of "End-to-End latency".
+        if session.created_at:
+             session.latency_stats.total_duration_ms = int(
+                 (datetime.now() - session.created_at).total_seconds() * 1000
+             )
 
     # =========================================================================
     # Full Workflow

@@ -10,7 +10,9 @@ from .council import (
     ReviewResult,
     SessionStage,
     SessionTokenUsage,
+    SessionLatencyStats,
     StageTokenUsage,
+    StageLatencyStats,
     TokenUsage,
 )
 
@@ -26,6 +28,8 @@ __all__ = [
     "ReviewResult",
     "SessionStage",
     "SessionTokenUsage",
+    "SessionLatencyStats",
     "StageTokenUsage",
+    "StageLatencyStats",
     "TokenUsage",
 ]

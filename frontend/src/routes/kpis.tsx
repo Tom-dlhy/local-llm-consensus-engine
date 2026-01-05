@@ -26,7 +26,10 @@ function KPIsPage() {
         {/* Session Token Usage */}
         {/* Session Token Usage */}
         {session?.token_usage ? (
-          <TokenUsageStats tokenUsage={session.token_usage} />
+          <TokenUsageStats
+            tokenUsage={session.token_usage}
+            latencyStats={session.latency_stats}
+          />
         ) : (
           <EmptyState
             title="No Token Data"

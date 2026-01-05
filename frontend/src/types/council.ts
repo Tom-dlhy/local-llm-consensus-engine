@@ -40,6 +40,23 @@ export interface SessionTokenUsage {
 }
 
 // =============================================================================
+// Latency Types
+// =============================================================================
+
+export interface StageLatencyStats {
+  stage: string
+  total_duration_ms: number
+  by_model: Record<string, number>
+}
+
+export interface SessionLatencyStats {
+  stage1_opinions: StageLatencyStats | null
+  stage2_review: StageLatencyStats | null
+  stage3_synthesis: StageLatencyStats | null
+  total_duration_ms: number
+}
+
+// =============================================================================
 // Agent Configuration
 // =============================================================================
 
@@ -75,6 +92,7 @@ export interface ReviewResult {
   rankings: ReviewRanking[]
   prompt_tokens: number
   completion_tokens: number
+  duration_ms: number
 }
 
 export interface FinalAnswer {
@@ -99,6 +117,7 @@ export interface CouncilSession {
   opinions: AgentResponse[]
   reviews: ReviewResult[]
   token_usage: SessionTokenUsage
+  latency_stats: SessionLatencyStats
   final_answer: FinalAnswer | null
   error: string | null
 }

@@ -146,6 +146,13 @@ class SessionTokenUsage(BaseModel):
     total_prompt_tokens: int
     total_completion_tokens: int
     total_tokens: int
+
+class SessionLatencyStats(BaseModel):
+    """Latence complète de la session (KPI)."""
+    stage1_opinions: StageLatencyStats | None
+    stage2_review: StageLatencyStats | None
+    stage3_synthesis: StageLatencyStats | None
+    total_duration_ms: int
 ```
 
 ### Réponse API
@@ -216,4 +223,5 @@ Le champ `token_usage` est maintenant inclus dans `CouncilSession`:
 3. **Multi-Worker**: Load balancing entre plusieurs PC2
 4. **Metrics**: Prometheus/Grafana pour monitoring avancé
 5. **Cost Estimation**: Estimation du coût équivalent API cloud basée sur les tokens
+6. **Detailed Tracing**: OpenTelemetry tracing pour voir la latence de chaque span (réseau vs LLM)
 

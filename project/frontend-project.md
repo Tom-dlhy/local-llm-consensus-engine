@@ -146,3 +146,17 @@ Le service `councilApiService` gère:
 2. **Graphiques** - Recharts pour visualisation des tokens
 3. **Export** - Export PDF/Markdown des délibérations
 4. **Mode offline** - PWA avec cache des sessions
+
+## 📈 Visualisations & KPIs
+
+### Page `/kpis`
+
+1. **Token Usage**:
+   - Stats par défaut: Prompt / Completion / Total
+   - Pie Chart: Distribution par modèle actif
+   - Onglets: Summary (Total) / Opinions / Review / Synthesis
+
+2. **Latency Per Model**:
+   - Bar Chart: Temps d'attente (ms) par modèle
+   - Agrégation par étape (sauf summary qui montre E2E)
+   - Permet d'identifier les goulets d'étranglement

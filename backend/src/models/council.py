@@ -118,6 +118,7 @@ class ReviewResult(BaseModel):
     rankings: list[ReviewRanking] = Field(..., description="Rankings for each other agent")
     prompt_tokens: int = Field(default=0, description="Tokens in the input prompt")
     completion_tokens: int = Field(default=0, description="Tokens generated")
+    duration_ms: int = Field(default=0, description="Generation time in milliseconds")
 
 
 # =============================================================================
@@ -156,6 +157,32 @@ class SessionTokenUsage(BaseModel):
     total_prompt_tokens: int = Field(default=0)
     total_completion_tokens: int = Field(default=0)
     total_tokens: int = Field(default=0)
+
+
+# =============================================================================
+# Latency Models
+# =============================================================================
+
+
+class StageLatencyStats(BaseModel):
+    """Aggregated latency statistics for a workflow stage."""
+
+    stage: str = Field(..., description="Stage name")
+    total_duration_ms: int = Field(default=0)
+    by_model: dict[str, int] = Field(
+        default_factory=dict,
+        description="Duration in ms by model",
+    )
+
+
+class SessionLatencyStats(BaseModel):
+    """Complete latency statistics for an entire council session."""
+
+    stage1_opinions: StageLatencyStats | None = None
+    stage2_review: StageLatencyStats | None = None
+    stage3_synthesis: StageLatencyStats | None = None
+
+    total_duration_ms: int = Field(default=0, description="Total end-to-end duration")
 
 
 class FinalAnswer(BaseModel):
@@ -217,6 +244,12 @@ class CouncilSession(BaseModel):
     token_usage: SessionTokenUsage = Field(
         default_factory=SessionTokenUsage,
         description="Complete token usage statistics",
+    )
+
+    # Latency Statistics
+    latency_stats: SessionLatencyStats = Field(
+        default_factory=SessionLatencyStats,
+        description="Complete latency statistics",
     )
 
     # Stage 3: Chairman Synthesis
