@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import * as React from 'react'
 import { BarChart3, TrendingUp, Lightbulb } from 'lucide-react'
 import { useSession } from '~/context/SessionContext'
-import { TokenUsageStats, EmptyState } from '~/components/council'
+import { TokenUsageStats, EmptyState, TokenDistributionChart } from '~/components/council'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 
 export const Route = createFileRoute('/kpis')({
@@ -23,6 +23,7 @@ function KPIsPage() {
           </p>
         </div>
 
+        {/* Session Token Usage */}
         {/* Session Token Usage */}
         {session?.token_usage ? (
           <TokenUsageStats tokenUsage={session.token_usage} />
