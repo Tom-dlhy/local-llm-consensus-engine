@@ -74,6 +74,23 @@ for i, agent in enumerate(request.selected_agents):
 
 Cela permet au Chairman de distinguer les contributions lors de la synthèse.
 
+## 📝 Stage 2: Per-Agent Opinion Filtering
+
+**Problème**: Initialement, chaque agent recevait TOUTES les opinions (y compris la sienne) lors du review.
+
+**Solution**: La méthode `_format_opinions_for_review` prend maintenant un paramètre `exclude_agent_id` pour filtrer l'opinion de l'agent reviewant.
+
+```python
+def _format_opinions_for_review(
+    self, opinions: list[AgentResponse], exclude_agent_id: str | None = None
+) -> str:
+    parts = []
+    for op in opinions:
+        if op.agent_id != exclude_agent_id:
+            parts.append(f"[{op.agent_id}]:\n{op.content}\n")
+    return "\n---\n".join(parts)
+```
+
 ## 📋 JSON Mode (Stage 2)
 
 **Problème**: Le Stage 2 (Review) nécessite un format structuré pour extraire les scores.

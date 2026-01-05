@@ -160,3 +160,8 @@ Le service `councilApiService` gère:
    - Bar Chart: Temps d'attente (ms) par modèle
    - Agrégation par étape (sauf summary qui montre E2E)
    - Permet d'identifier les goulets d'étranglement
+
+3. **Models (Radar Charts)**:
+   - Un graphique radar par modèle
+   - 5 métriques normalisées (0-100): Score, Latency S1, Latency S2, Tokens S1, Tokens S2
+   - Permet de comparer les performances de chaque modèle

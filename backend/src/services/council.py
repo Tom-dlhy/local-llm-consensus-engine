@@ -273,19 +273,21 @@ class CouncilService:
         session.update_stage(SessionStage.REVIEW)
         logger.info(f"Stage 2: Peer review by {len(session.agents)} agents")
 
-        # Format all opinions for review (anonymized)
-        responses_text = self._format_opinions_for_review(session.opinions)
-
         tasks = []
         for i, agent in enumerate(session.agents):
+            reviewer_id = f"agent_{i + 1}"
+            # Format opinions EXCLUDING this reviewer's own opinion
+            responses_text = self._format_opinions_for_review(
+                session.opinions, exclude_agent_id=reviewer_id
+            )
             # Each agent reviews others (excluding self)
             task = self._generate_review(
-                reviewer_id=f"agent_{i + 1}",
+                reviewer_id=reviewer_id,
                 reviewer_name=agent.name,
                 model=agent.model,
                 query=session.query,
                 responses_text=responses_text,
-                own_agent_id=f"agent_{i + 1}",
+                own_agent_id=reviewer_id,
                 worker_url=worker_url,
             )
             tasks.append(task)
@@ -318,11 +320,14 @@ class CouncilService:
         session.updated_at = datetime.now()
         return reviews
 
-    def _format_opinions_for_review(self, opinions: list[AgentResponse]) -> str:
-        """Format opinions for the review prompt."""
+    def _format_opinions_for_review(
+        self, opinions: list[AgentResponse], exclude_agent_id: str | None = None
+    ) -> str:
+        """Format opinions for the review prompt, optionally excluding one agent."""
         parts = []
         for op in opinions:
-            parts.append(f"[{op.agent_id}]:\n{op.content}\n")
+            if op.agent_id != exclude_agent_id:
+                parts.append(f"[{op.agent_id}]:\n{op.content}\n")
         return "\n---\n".join(parts)
 
     async def _generate_review(

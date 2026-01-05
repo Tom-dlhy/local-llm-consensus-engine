@@ -89,6 +89,7 @@ export interface ReviewRanking {
 export interface ReviewResult {
   reviewer_id: string
   reviewer_name: string
+  model: string
   rankings: ReviewRanking[]
   prompt_tokens: number
   completion_tokens: number

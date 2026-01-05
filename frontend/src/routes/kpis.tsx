@@ -29,6 +29,7 @@ function KPIsPage() {
           <TokenUsageStats
             tokenUsage={session.token_usage}
             latencyStats={session.latency_stats}
+            reviews={session.reviews}
           />
         ) : (
           <EmptyState

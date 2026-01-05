@@ -7,13 +7,15 @@ import * as React from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { BarChart3 } from 'lucide-react'
-import type { SessionTokenUsage, StageTokenUsage, SessionLatencyStats, StageLatencyStats } from '~/types/council'
+import type { SessionTokenUsage, StageTokenUsage, SessionLatencyStats, StageLatencyStats, ReviewResult } from '~/types/council'
 import { TokenDistributionChart } from './TokenDistributionChart'
 import { LatencyBarChart } from './LatencyBarChart'
+import { ModelRadarChart } from './ModelRadarChart'
 
 interface TokenUsageStatsProps {
     tokenUsage: SessionTokenUsage
     latencyStats?: SessionLatencyStats
+    reviews?: ReviewResult[]
 }
 
 // Helper to extract distribution from a single stage
@@ -156,7 +158,7 @@ function TabContentLayout({
     )
 }
 
-export function TokenUsageStats({ tokenUsage, latencyStats }: TokenUsageStatsProps) {
+export function TokenUsageStats({ tokenUsage, latencyStats, reviews }: TokenUsageStatsProps) {
     // Pre-calculate distributions
     const summaryDistribution = React.useMemo(() => getSessionDistribution(tokenUsage), [tokenUsage])
     const stage1Distribution = React.useMemo(() => getStageDistribution(tokenUsage.stage1_opinions), [tokenUsage])
@@ -186,11 +188,12 @@ export function TokenUsageStats({ tokenUsage, latencyStats }: TokenUsageStatsPro
             </CardHeader>
             <CardContent className="p-6">
                 <Tabs defaultValue="summary" className="w-full">
-                    <TabsList className="w-full grid grid-cols-4 mb-8 bg-muted/20 p-1 rounded-full">
+                    <TabsList className="w-full grid grid-cols-5 mb-8 bg-muted/20 p-1 rounded-full">
                         <TabsTrigger value="summary" className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm">Summary</TabsTrigger>
                         <TabsTrigger value="stage1" className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm">Opinions</TabsTrigger>
                         <TabsTrigger value="stage2" className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm">Review</TabsTrigger>
                         <TabsTrigger value="stage3" className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm">Synthesis</TabsTrigger>
+                        <TabsTrigger value="models" className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm">Models</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="summary" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
@@ -241,8 +244,151 @@ export function TokenUsageStats({ tokenUsage, latencyStats }: TokenUsageStatsPro
                             }}
                         />
                     </TabsContent>
+
+                    <TabsContent value="models" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+                        <ModelPerformanceRadar
+                            tokenUsage={tokenUsage}
+                            latencyStats={latencyStats}
+                            reviews={reviews}
+                        />
+                    </TabsContent>
                 </Tabs>
             </CardContent>
         </Card>
+    )
+}
+
+
+// Internal component for the Radar Logic
+// Renders one Radar Chart per model
+
+const CHART_COLORS = [
+    "hsl(var(--chart-1))",
+    "hsl(var(--chart-2))",
+    "hsl(var(--chart-3))",
+    "hsl(var(--chart-4))",
+    "hsl(var(--chart-5))",
+]
+
+function ModelPerformanceRadar({
+    tokenUsage,
+    latencyStats,
+    reviews
+}: {
+    tokenUsage: SessionTokenUsage,
+    latencyStats?: SessionLatencyStats,
+    reviews?: import('~/types/council').ReviewResult[]
+}) {
+    // 1. Identify Models (Union of Stage 1 & 2)
+    const models = Array.from(new Set([
+        ...Object.keys(tokenUsage.stage1_opinions?.by_model || {}),
+        ...Object.keys(tokenUsage.stage2_review?.by_model || {})
+    ]));
+
+    if (models.length === 0) {
+        return <div className="p-8 text-center text-muted-foreground">No model data available</div>
+    }
+
+    // 2. Aggregate Data: Score, Latency S1, Latency S2, Tokens S1, Tokens S2
+
+    // Helper to get score: Average score RECEIVED by a model in Stage 2 reviews
+    const modelScores: Record<string, number> = {};
+    if (reviews) {
+        const agentIdToModel: Record<string, string> = {};
+        reviews.forEach(r => {
+            agentIdToModel[r.reviewer_id] = r.model;
+        });
+
+        const scoresSum: Record<string, number> = {};
+        const scoresCount: Record<string, number> = {};
+
+        reviews.forEach(r => {
+            r.rankings.forEach(ranking => {
+                const targetModel = agentIdToModel[ranking.agent_id];
+                if (targetModel) {
+                    scoresSum[targetModel] = (scoresSum[targetModel] || 0) + ranking.score;
+                    scoresCount[targetModel] = (scoresCount[targetModel] || 0) + 1;
+                }
+            });
+        });
+
+        Object.keys(scoresSum).forEach(m => {
+            modelScores[m] = scoresSum[m] / scoresCount[m];
+        });
+    }
+
+    // 3. Prepare Metrics per model
+    const s1Latency = latencyStats?.stage1_opinions?.by_model || {};
+    const s2Latency = latencyStats?.stage2_review?.by_model || {};
+    const s1Tokens = Object.fromEntries(
+        Object.entries(tokenUsage.stage1_opinions?.by_model || {}).map(([m, u]) => [m, u.total_tokens])
+    );
+    const s2Tokens = Object.fromEntries(
+        Object.entries(tokenUsage.stage2_review?.by_model || {}).map(([m, u]) => [m, u.total_tokens])
+    );
+
+    // 4. Normalize Data (0-100 scale)
+    const getMax = (data: Record<string, number>) => Math.max(...Object.values(data), 1);
+
+    const maxScore = 10;
+    const maxS1Lat = getMax(s1Latency);
+    const maxS2Lat = getMax(s2Latency);
+    const maxS1Tok = getMax(s1Tokens);
+    const maxS2Tok = getMax(s2Tokens);
+
+    return (
+        <div className="py-6 space-y-8">
+            {/* Grid of individual radar charts */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {models.map((model, idx) => {
+                    const score = modelScores[model] || 0;
+                    const lat1 = s1Latency[model] || 0;
+                    const lat2 = s2Latency[model] || 0;
+                    const tok1 = s1Tokens[model] || 0;
+                    const tok2 = s2Tokens[model] || 0;
+
+                    const data = [
+                        { metric: "Score", value: (score / maxScore) * 100 },
+                        { metric: "Lat S1", value: (lat1 / maxS1Lat) * 100 },
+                        { metric: "Lat S2", value: (lat2 / maxS2Lat) * 100 },
+                        { metric: "Tok S1", value: (tok1 / maxS1Tok) * 100 },
+                        { metric: "Tok S2", value: (tok2 / maxS2Tok) * 100 },
+                    ];
+
+                    return (
+                        <ModelRadarChart
+                            key={model}
+                            modelName={model}
+                            data={data}
+                            color={CHART_COLORS[idx % CHART_COLORS.length]}
+                        />
+                    );
+                })}
+            </div>
+
+            {/* Legend */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 px-4 text-center text-sm">
+                <div className="p-2 bg-muted/10 rounded">
+                    <p className="font-semibold text-muted-foreground">Score</p>
+                    <p className="text-xs opacity-70">(Higher is better)</p>
+                </div>
+                <div className="p-2 bg-muted/10 rounded">
+                    <p className="font-semibold text-muted-foreground">Lat S1</p>
+                    <p className="text-xs opacity-70">(Opinions)</p>
+                </div>
+                <div className="p-2 bg-muted/10 rounded">
+                    <p className="font-semibold text-muted-foreground">Lat S2</p>
+                    <p className="text-xs opacity-70">(Review)</p>
+                </div>
+                <div className="p-2 bg-muted/10 rounded">
+                    <p className="font-semibold text-muted-foreground">Tok S1</p>
+                    <p className="text-xs opacity-70">(Opinions)</p>
+                </div>
+                <div className="p-2 bg-muted/10 rounded">
+                    <p className="font-semibold text-muted-foreground">Tok S2</p>
+                    <p className="text-xs opacity-70">(Review)</p>
+                </div>
+            </div>
+        </div>
     )
 }
