@@ -356,6 +356,7 @@ class CouncilService:
         return ReviewResult(
             reviewer_id=reviewer_id,
             reviewer_name=reviewer_name,
+            model=model,
             rankings=rankings,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -536,12 +537,7 @@ class CouncilService:
         total_completion = 0
 
         for item in items:
-            # Get model name - AgentResponse has 'model', ReviewResult needs lookup
-            if hasattr(item, "model"):
-                model = item.model
-            else:
-                # For ReviewResult, we need to find model from reviewer
-                model = "unknown"
+            model = getattr(item, "model", "unknown")
 
             prompt = getattr(item, "prompt_tokens", 0)
             completion = getattr(item, "completion_tokens", 0)

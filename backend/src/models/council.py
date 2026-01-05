@@ -114,6 +114,7 @@ class ReviewResult(BaseModel):
 
     reviewer_id: str = Field(..., description="ID of the reviewing agent")
     reviewer_name: str = Field(..., description="Name of the reviewing agent")
+    model: str = Field(..., description="Model that generated this review")
     rankings: list[ReviewRanking] = Field(..., description="Rankings for each other agent")
     prompt_tokens: int = Field(default=0, description="Tokens in the input prompt")
     completion_tokens: int = Field(default=0, description="Tokens generated")
