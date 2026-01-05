@@ -94,7 +94,9 @@ class AgentResponse(BaseModel):
     agent_name: str = Field(..., description="Display name of the agent")
     model: str = Field(..., description="Model that generated this response")
     content: str = Field(..., description="The agent's response content")
-    tokens_used: int = Field(default=0, description="Number of tokens generated")
+    prompt_tokens: int = Field(default=0, description="Tokens in the input prompt")
+    completion_tokens: int = Field(default=0, description="Tokens generated")
+    tokens_used: int = Field(default=0, description="Total tokens (prompt + completion)")
     duration_ms: int = Field(default=0, description="Generation time in milliseconds")
 
 
@@ -112,6 +114,46 @@ class ReviewResult(BaseModel):
     reviewer_id: str = Field(..., description="ID of the reviewing agent")
     reviewer_name: str = Field(..., description="Name of the reviewing agent")
     rankings: list[ReviewRanking] = Field(..., description="Rankings for each other agent")
+    prompt_tokens: int = Field(default=0, description="Tokens in the input prompt")
+    completion_tokens: int = Field(default=0, description="Tokens generated")
+
+
+# =============================================================================
+# Token Usage Models
+# =============================================================================
+
+
+class TokenUsage(BaseModel):
+    """Token usage for a single generation."""
+
+    prompt_tokens: int = Field(default=0, description="Tokens in the input prompt")
+    completion_tokens: int = Field(default=0, description="Tokens generated")
+    total_tokens: int = Field(default=0, description="Total tokens (prompt + completion)")
+
+
+class StageTokenUsage(BaseModel):
+    """Aggregated token usage for a workflow stage."""
+
+    stage: str = Field(..., description="Stage name: 'opinions', 'review', or 'synthesis'")
+    total_prompt_tokens: int = Field(default=0)
+    total_completion_tokens: int = Field(default=0)
+    total_tokens: int = Field(default=0)
+    by_model: dict[str, TokenUsage] = Field(
+        default_factory=dict,
+        description="Breakdown by model",
+    )
+
+
+class SessionTokenUsage(BaseModel):
+    """Complete token usage for an entire council session."""
+
+    stage1_opinions: StageTokenUsage | None = None
+    stage2_review: StageTokenUsage | None = None
+    stage3_synthesis: StageTokenUsage | None = None
+
+    total_prompt_tokens: int = Field(default=0)
+    total_completion_tokens: int = Field(default=0)
+    total_tokens: int = Field(default=0)
 
 
 class FinalAnswer(BaseModel):
@@ -167,6 +209,12 @@ class CouncilSession(BaseModel):
     reviews: list[ReviewResult] = Field(
         default_factory=list,
         description="Peer review results",
+    )
+
+    # Token Usage Statistics
+    token_usage: SessionTokenUsage = Field(
+        default_factory=SessionTokenUsage,
+        description="Complete token usage statistics",
     )
 
     # Stage 3: Chairman Synthesis

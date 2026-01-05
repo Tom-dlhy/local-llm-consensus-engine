@@ -116,6 +116,81 @@ Respond ONLY with valid JSON in the following format:
 - `/health/ollama`: Connexion Ollama
 - `/health/models`: Modèles disponibles
 
+## 📊 Token Usage Estimation
+
+### Objectif
+Suivi complet de la consommation de tokens à travers les 3 phases du workflow, permettant l'affichage de métriques détaillées dans le frontend.
+
+### Modèles de Données
+
+```python
+class TokenUsage(BaseModel):
+    """Usage pour une génération individuelle."""
+    prompt_tokens: int      # Tokens d'entrée (prompt_eval_count)
+    completion_tokens: int  # Tokens générés (eval_count)
+    total_tokens: int       # Total
+
+class StageTokenUsage(BaseModel):
+    """Usage agrégé par phase."""
+    stage: str                           # "opinions", "review", "synthesis"
+    total_prompt_tokens: int
+    total_completion_tokens: int
+    total_tokens: int
+    by_model: dict[str, TokenUsage]      # Breakdown par modèle
+
+class SessionTokenUsage(BaseModel):
+    """Usage complet de la session."""
+    stage1_opinions: StageTokenUsage | None
+    stage2_review: StageTokenUsage | None
+    stage3_synthesis: StageTokenUsage | None
+    total_prompt_tokens: int
+    total_completion_tokens: int
+    total_tokens: int
+```
+
+### Réponse API
+
+Le champ `token_usage` est maintenant inclus dans `CouncilSession`:
+
+```json
+{
+  "token_usage": {
+    "stage1_opinions": {
+      "stage": "opinions",
+      "total_prompt_tokens": 244,
+      "total_completion_tokens": 256,
+      "total_tokens": 500,
+      "by_model": {
+        "gemma2:2b": {"prompt_tokens": 82, "completion_tokens": 61, "total_tokens": 143},
+        "qwen2.5:0.5b": {"prompt_tokens": 81, "completion_tokens": 96, "total_tokens": 177}
+      }
+    },
+    "stage2_review": { ... },
+    "stage3_synthesis": { ... },
+    "total_prompt_tokens": 2038,
+    "total_completion_tokens": 1202,
+    "total_tokens": 3240
+  }
+}
+```
+
+### Métriques de Test (3 agents)
+
+| Stage | Prompt | Completion | Total |
+|-------|--------|------------|-------|
+| Stage 1 (Opinions) | 244 | 256 | 500 |
+| Stage 2 (Review) | 1,293 | 594 | 1,887 |
+| Stage 3 (Synthesis) | 501 | 352 | 853 |
+| **TOTAL** | **2,038** | **1,202** | **3,240** |
+
+### Implémentation
+
+- `_generate_opinion()`: Capture `prompt_eval_count` et `eval_count` d'Ollama
+- `_generate_review()`: Idem pour les reviews
+- `stage3_synthesis()`: Idem pour le Chairman
+- `_calculate_stage_usage()`: Agrège par modèle
+- `_update_total_usage()`: Calcule les totaux globaux
+
 ## 🎯 Modèles Recommandés
 
 | Modèle | Taille | Rôle Optimal |
@@ -140,3 +215,5 @@ Respond ONLY with valid JSON in the following format:
 2. **Queue System**: Redis/RabbitMQ pour gérer la charge
 3. **Multi-Worker**: Load balancing entre plusieurs PC2
 4. **Metrics**: Prometheus/Grafana pour monitoring avancé
+5. **Cost Estimation**: Estimation du coût équivalent API cloud basée sur les tokens
+
