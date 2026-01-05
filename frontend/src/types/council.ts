@@ -12,16 +12,53 @@ export enum SessionStage {
   ERROR = 'error',
 }
 
+// =============================================================================
+// Token Usage Types
+// =============================================================================
+
+export interface TokenUsage {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+}
+
+export interface StageTokenUsage {
+  stage: string // 'opinions' | 'review' | 'synthesis'
+  total_prompt_tokens: number
+  total_completion_tokens: number
+  total_tokens: number
+  by_model: Record<string, TokenUsage>
+}
+
+export interface SessionTokenUsage {
+  stage1_opinions: StageTokenUsage | null
+  stage2_review: StageTokenUsage | null
+  stage3_synthesis: StageTokenUsage | null
+  total_prompt_tokens: number
+  total_completion_tokens: number
+  total_tokens: number
+}
+
+// =============================================================================
+// Agent Configuration
+// =============================================================================
+
 export interface AgentConfig {
   name: string
   model: string
 }
+
+// =============================================================================
+// Response Models
+// =============================================================================
 
 export interface AgentResponse {
   agent_id: string
   agent_name: string
   model: string
   content: string
+  prompt_tokens: number
+  completion_tokens: number
   tokens_used: number
   duration_ms: number
 }
@@ -36,6 +73,8 @@ export interface ReviewResult {
   reviewer_id: string
   reviewer_name: string
   rankings: ReviewRanking[]
+  prompt_tokens: number
+  completion_tokens: number
 }
 
 export interface FinalAnswer {
@@ -46,6 +85,10 @@ export interface FinalAnswer {
   sources_cited: string[]
 }
 
+// =============================================================================
+// Session Model
+// =============================================================================
+
 export interface CouncilSession {
   session_id: string
   query: string
@@ -55,9 +98,14 @@ export interface CouncilSession {
   agents: AgentConfig[]
   opinions: AgentResponse[]
   reviews: ReviewResult[]
+  token_usage: SessionTokenUsage
   final_answer: FinalAnswer | null
   error: string | null
 }
+
+// =============================================================================
+// Request Models
+// =============================================================================
 
 export interface CouncilRequest {
   query: string
@@ -79,7 +127,10 @@ export interface ModelsResponse {
   installed: string[]
 }
 
-// WebSocket message types
+// =============================================================================
+// WebSocket Message Types
+// =============================================================================
+
 export interface WSMessage {
   type: 'stage_start' | 'stage_complete' | 'stage_update' | 'error' | 'complete' | 'session_started'
   stage?: SessionStage

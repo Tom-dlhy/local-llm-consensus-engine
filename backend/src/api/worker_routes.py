@@ -34,6 +34,7 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
             content=result.get("response", ""),
             done=result.get("done", True),
             total_duration=result.get("total_duration", 0),
+            prompt_eval_count=result.get("prompt_eval_count", 0),
             eval_count=result.get("eval_count", 0),
         )
 

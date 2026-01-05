@@ -48,7 +48,7 @@ class CouncilRequest(BaseModel):
         description="List of 1-5 agents to participate in the council",
     )
     chairman_model: str = Field(
-        default="phi3.5:mini",
+        default="phi3.5:latest",
         description="Model used for final synthesis by the Chairman",
     )
 
@@ -76,6 +76,7 @@ class GenerateResponse(BaseModel):
     content: str = Field(..., description="Generated text content")
     done: bool = Field(default=True, description="Whether generation is complete")
     total_duration: int = Field(default=0, description="Total generation time in nanoseconds")
+    prompt_eval_count: int = Field(default=0, description="Tokens in the input prompt")
     eval_count: int = Field(default=0, description="Number of tokens generated")
 
 

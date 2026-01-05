@@ -43,7 +43,7 @@ class Settings(BaseSettings):
 
     # Chairman Model (Master only)
     chairman_model: str = Field(
-        default="phi3.5:mini",
+        default="phi3.5:latest",
         description="Model used for Chairman synthesis",
     )
 

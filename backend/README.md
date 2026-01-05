@@ -41,7 +41,7 @@ ollama serve
 # Télécharger les modèles
 ollama pull qwen2.5:0.5b    # Opinions rapides
 ollama pull llama3.2:1b     # Review/notation
-ollama pull phi3.5:mini     # Chairman
+ollama pull phi3.5:latest     # Chairman
 ```
 
 ## 🚀 Démarrage
@@ -97,7 +97,7 @@ curl -X POST http://localhost:8000/api/council/query \
       {"name": "Expert_2", "model": "llama3.2:1b"},
       {"name": "Expert_3", "model": "gemma2:2b"}
     ],
-    "chairman_model": "phi3.5:mini"
+    "chairman_model": "phi3.5:latest"
   }'
 ```
 
@@ -110,7 +110,7 @@ curl -X POST http://localhost:8000/api/council/query \
 | `PORT` | `8000` | Port d'écoute |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | URL Ollama |
 | `WORKER_URL` | `http://localhost:8000` | URL du Worker (Master) |
-| `CHAIRMAN_MODEL` | `phi3.5:mini` | Modèle Chairman |
+| `CHAIRMAN_MODEL` | `phi3.5:latest` | Modèle Chairman |
 | `GENERATION_TIMEOUT` | `120` | Timeout génération (s) |
 
 ## 📂 Structure

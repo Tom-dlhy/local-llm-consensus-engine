@@ -61,7 +61,7 @@ RECOMMENDED_MODELS = [
         "recommended_role": "expert",
     },
     {
-        "name": "phi3.5:mini",
+        "name": "phi3.5:latest",
         "display_name": "Phi-3.5 Mini",
         "size": "~2.2 GB",
         "description": "Excellent pour le Chairman (Stage 3)",

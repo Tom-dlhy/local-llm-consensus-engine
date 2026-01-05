@@ -48,6 +48,7 @@ Here are the responses from different AI agents. Evaluate each one:
 
 {responses}
 
+Do NOT include a ranking for yourself ({own_agent_id}).
 Respond with your JSON rankings only."""
 
 CHAIRMAN_SYSTEM_PROMPT = """You are the Chairman, responsible for synthesizing multiple AI opinions into a final, authoritative answer.
@@ -208,6 +209,9 @@ class CouncilService:
                 prompt=query,
                 system=system_prompt,
             )
+            raw_content = response.get("content", "")
+            prompt_tokens = response.get("prompt_eval_count", 0)
+            completion_tokens = response.get("eval_count", 0)
         else:
             # Worker mode: call Ollama directly
             response = await self.ollama.generate(
@@ -215,17 +219,21 @@ class CouncilService:
                 prompt=query,
                 system=system_prompt,
             )
+            raw_content = response.get("response", "")
+            prompt_tokens = response.get("prompt_eval_count", 0)
+            completion_tokens = response.get("eval_count", 0)
+
+        logger.info(f"[Stage 1] Agent {agent_id} ({agent.model}) raw response length: {len(raw_content)}")
+        if len(raw_content) < 500:
+             logger.debug(f"[Stage 1] Agent {agent_id} raw response: {raw_content}")
 
         duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
-
-        prompt_tokens = response.get("prompt_eval_count", 0)
-        completion_tokens = response.get("eval_count", 0)
 
         return AgentResponse(
             agent_id=agent_id,
             agent_name=agent.name,
             model=agent.model,
-            content=response.get("response", ""),
+            content=raw_content,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             tokens_used=prompt_tokens + completion_tokens,
@@ -317,6 +325,7 @@ class CouncilService:
         user_prompt = REVIEW_USER_PROMPT.format(
             query=query,
             responses=responses_text,
+            own_agent_id=own_agent_id,
         )
 
         if worker_url:
@@ -327,6 +336,9 @@ class CouncilService:
                 system=system_prompt,
                 format="json",
             )
+            raw_content = response.get("content", "{}")
+            prompt_tokens = response.get("prompt_eval_count", 0)
+            completion_tokens = response.get("eval_count", 0)
         else:
             response = await self.ollama.generate(
                 model=model,
@@ -334,12 +346,12 @@ class CouncilService:
                 system=system_prompt,
                 format="json",
             )
+            raw_content = response.get("response", "{}")
+            prompt_tokens = response.get("prompt_eval_count", 0)
+            completion_tokens = response.get("eval_count", 0)
 
         # Parse JSON response
-        rankings = self._parse_review_response(response.get("response", "{}"), own_agent_id)
-
-        prompt_tokens = response.get("prompt_eval_count", 0)
-        completion_tokens = response.get("eval_count", 0)
+        rankings = self._parse_review_response(raw_content, own_agent_id)
 
         return ReviewResult(
             reviewer_id=reviewer_id,
@@ -360,9 +372,11 @@ class CouncilService:
             rankings = []
 
             for item in data.get("rankings", []):
-                # Skip self-review
-                if item.get("agent_id") == own_agent_id:
-                    continue
+                # Skip self-review (normalize for safety)
+                ranked_id = str(item.get("agent_id", "")).strip().lower()
+                clean_own_id = str(own_agent_id).strip().lower()
+                if ranked_id == clean_own_id or ranked_id in clean_own_id:
+                     continue
 
                 rankings.append(
                     ReviewRanking(
