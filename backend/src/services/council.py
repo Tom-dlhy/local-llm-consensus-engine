@@ -16,6 +16,8 @@ from src.models import (
     ReviewRanking,
     ReviewResult,
     SessionStage,
+    StageTokenUsage,
+    TokenUsage,
 )
 from src.services.ollama_client import OllamaClient, OllamaError
 
@@ -158,6 +160,8 @@ class CouncilService:
                         agent_name=session.agents[i].name,
                         model=session.agents[i].model,
                         content=f"[Error: {result}]",
+                        prompt_tokens=0,
+                        completion_tokens=0,
                         tokens_used=0,
                         duration_ms=0,
                     )
@@ -166,6 +170,14 @@ class CouncilService:
                 opinions.append(result)
 
         session.opinions = opinions
+
+        # Calculate token usage for Stage 1
+        session.token_usage.stage1_opinions = self._calculate_stage_usage(
+            stage="opinions",
+            items=opinions,
+        )
+        self._update_total_usage(session)
+
         session.updated_at = datetime.now()
         return opinions
 
@@ -206,12 +218,17 @@ class CouncilService:
 
         duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
 
+        prompt_tokens = response.get("prompt_eval_count", 0)
+        completion_tokens = response.get("eval_count", 0)
+
         return AgentResponse(
             agent_id=agent_id,
             agent_name=agent.name,
             model=agent.model,
             content=response.get("response", ""),
-            tokens_used=response.get("eval_count", 0),
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            tokens_used=prompt_tokens + completion_tokens,
             duration_ms=duration_ms,
         )
 
@@ -267,6 +284,14 @@ class CouncilService:
                 reviews.append(result)
 
         session.reviews = reviews
+
+        # Calculate token usage for Stage 2
+        session.token_usage.stage2_review = self._calculate_stage_usage(
+            stage="review",
+            items=reviews,
+        )
+        self._update_total_usage(session)
+
         session.updated_at = datetime.now()
         return reviews
 
@@ -313,10 +338,15 @@ class CouncilService:
         # Parse JSON response
         rankings = self._parse_review_response(response.get("response", "{}"), own_agent_id)
 
+        prompt_tokens = response.get("prompt_eval_count", 0)
+        completion_tokens = response.get("eval_count", 0)
+
         return ReviewResult(
             reviewer_id=reviewer_id,
             reviewer_name=reviewer_name,
             rankings=rankings,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
         )
 
     def _parse_review_response(
@@ -392,18 +422,38 @@ class CouncilService:
 
         duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
 
+        prompt_tokens = response.get("prompt_eval_count", 0)
+        completion_tokens = response.get("eval_count", 0)
+
         # Identify top-ranked agents
         top_agents = self._get_top_ranked_agents(session.reviews)
 
         final_answer = FinalAnswer(
             content=response.get("response", ""),
             chairman_model=model,
-            tokens_used=response.get("eval_count", 0),
+            tokens_used=prompt_tokens + completion_tokens,
             duration_ms=duration_ms,
             sources_cited=top_agents,
         )
 
         session.final_answer = final_answer
+
+        # Calculate token usage for Stage 3
+        session.token_usage.stage3_synthesis = StageTokenUsage(
+            stage="synthesis",
+            total_prompt_tokens=prompt_tokens,
+            total_completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            by_model={
+                model: TokenUsage(
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    total_tokens=prompt_tokens + completion_tokens,
+                )
+            },
+        )
+        self._update_total_usage(session)
+
         session.update_stage(SessionStage.COMPLETE)
         return final_answer
 
@@ -448,6 +498,85 @@ class CouncilService:
         averages.sort(key=lambda x: x[1], reverse=True)
 
         return [agent_id for agent_id, _ in averages[:top_n]]
+
+    # =========================================================================
+    # Token Usage Helpers
+    # =========================================================================
+
+    def _calculate_stage_usage(
+        self,
+        stage: str,
+        items: list[AgentResponse] | list[ReviewResult],
+    ) -> StageTokenUsage:
+        """Calculate aggregated token usage for a stage.
+
+        Args:
+            stage: Stage name ('opinions' or 'review')
+            items: List of AgentResponse or ReviewResult objects
+
+        Returns:
+            StageTokenUsage with totals and per-model breakdown
+        """
+        by_model: dict[str, TokenUsage] = {}
+        total_prompt = 0
+        total_completion = 0
+
+        for item in items:
+            # Get model name - AgentResponse has 'model', ReviewResult needs lookup
+            if hasattr(item, "model"):
+                model = item.model
+            else:
+                # For ReviewResult, we need to find model from reviewer
+                model = "unknown"
+
+            prompt = getattr(item, "prompt_tokens", 0)
+            completion = getattr(item, "completion_tokens", 0)
+
+            total_prompt += prompt
+            total_completion += completion
+
+            if model not in by_model:
+                by_model[model] = TokenUsage(
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    total_tokens=0,
+                )
+
+            by_model[model].prompt_tokens += prompt
+            by_model[model].completion_tokens += completion
+            by_model[model].total_tokens += prompt + completion
+
+        return StageTokenUsage(
+            stage=stage,
+            total_prompt_tokens=total_prompt,
+            total_completion_tokens=total_completion,
+            total_tokens=total_prompt + total_completion,
+            by_model=by_model,
+        )
+
+    def _update_total_usage(self, session: CouncilSession) -> None:
+        """Update the total token usage in the session.
+
+        Sums up all stage usages into the session total.
+        """
+        total_prompt = 0
+        total_completion = 0
+
+        if session.token_usage.stage1_opinions:
+            total_prompt += session.token_usage.stage1_opinions.total_prompt_tokens
+            total_completion += session.token_usage.stage1_opinions.total_completion_tokens
+
+        if session.token_usage.stage2_review:
+            total_prompt += session.token_usage.stage2_review.total_prompt_tokens
+            total_completion += session.token_usage.stage2_review.total_completion_tokens
+
+        if session.token_usage.stage3_synthesis:
+            total_prompt += session.token_usage.stage3_synthesis.total_prompt_tokens
+            total_completion += session.token_usage.stage3_synthesis.total_completion_tokens
+
+        session.token_usage.total_prompt_tokens = total_prompt
+        session.token_usage.total_completion_tokens = total_completion
+        session.token_usage.total_tokens = total_prompt + total_completion
 
     # =========================================================================
     # Full Workflow
