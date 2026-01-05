@@ -19,7 +19,7 @@ function ResponsesPage() {
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      <div className="min-h-screen bg-background">
         <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
           <h2 className="text-2xl font-bold">Model Responses & Rankings</h2>
           <EmptyState
@@ -32,7 +32,7 @@ function ResponsesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+    <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
         {/* Header */}
         <div>

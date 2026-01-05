@@ -29,7 +29,7 @@ interface ModelRadarChartProps {
 export function ModelRadarChart({
     modelName,
     data,
-    color = "var(--chart-1)"
+    color = "hsl(var(--chart-1))"
 }: ModelRadarChartProps) {
 
     const chartConfig: ChartConfig = {

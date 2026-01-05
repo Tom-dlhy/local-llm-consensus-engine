@@ -56,12 +56,12 @@ export function TokenDistributionChart({
             },
         }
 
-        // Assign colors from chart-1 to chart-5 cyclically
+        // Assign colors from chart-1 to chart-5 cyclically with hsl() wrapper
         chartData.forEach((item, index) => {
             const colorIndex = (index % 5) + 1
             config[item.model] = {
                 label: item.displayModel,
-                color: `var(--chart-${colorIndex})`,
+                color: `hsl(var(--chart-${colorIndex}))`,
             }
         })
 

@@ -188,12 +188,12 @@ export function TokenUsageStats({ tokenUsage, latencyStats, reviews }: TokenUsag
             </CardHeader>
             <CardContent className="p-6">
                 <Tabs defaultValue="summary" className="w-full">
-                    <TabsList className="w-full grid grid-cols-5 mb-8 bg-muted/20 p-1 rounded-full">
-                        <TabsTrigger value="summary" className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm">Summary</TabsTrigger>
-                        <TabsTrigger value="stage1" className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm">Opinions</TabsTrigger>
-                        <TabsTrigger value="stage2" className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm">Review</TabsTrigger>
-                        <TabsTrigger value="stage3" className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm">Synthesis</TabsTrigger>
-                        <TabsTrigger value="models" className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm">Models</TabsTrigger>
+                    <TabsList className="w-full grid grid-cols-5 mb-8 bg-muted/30 p-1 rounded-full">
+                        <TabsTrigger value="summary" className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Summary</TabsTrigger>
+                        <TabsTrigger value="stage1" className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Opinions</TabsTrigger>
+                        <TabsTrigger value="stage2" className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Review</TabsTrigger>
+                        <TabsTrigger value="stage3" className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Synthesis</TabsTrigger>
+                        <TabsTrigger value="models" className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Models</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="summary" className="mt-0 focus-visible:outline-none focus-visible:ring-0">

@@ -51,12 +51,12 @@ export function LatencyBarChart({
             },
         }
 
-        // Dynamically assign colors
+        // Dynamically assign colors with hsl() wrapper
         chartData.forEach((item, index) => {
             const colorIndex = (index % 5) + 1
             config[item.model] = {
                 label: item.displayModel,
-                color: `var(--chart-${colorIndex})`,
+                color: `hsl(var(--chart-${colorIndex}))`,
             }
         })
 
