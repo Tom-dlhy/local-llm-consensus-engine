@@ -28,15 +28,6 @@ export function FinalAnswerCard({ answer }: FinalAnswerCardProps) {
                     {answer.content}
                 </p>
             </CardContent>
-            <CardFooter className="border-t border-green-200 dark:border-green-800 pt-4">
-                <div className="flex items-center justify-between w-full text-xs text-muted-foreground">
-                    <span>Model: {answer.chairman_model}</span>
-                    <div className="flex items-center gap-4">
-                        <span>{answer.tokens_used} tokens</span>
-                        <span>{answer.duration_ms}ms</span>
-                    </div>
-                </div>
-            </CardFooter>
         </Card>
     )
 }

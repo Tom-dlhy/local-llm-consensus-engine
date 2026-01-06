@@ -30,8 +30,9 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 OPINION_SYSTEM_PROMPT = """You are {agent_name}, an expert AI assistant.
-Provide a clear, thoughtful, and well-structured response to the user's question.
-Be concise but comprehensive. Support your answer with reasoning when appropriate."""
+1. RESPOND IN THE SAME LANGUAGE AS THE USER'S QUESTION.
+2. Be extremely concise and direct. Avoid filler words, introductions, or excessive verbosity.
+3. Provide the answer immediately without fluff."""
 
 REVIEW_SYSTEM_PROMPT = """You are {agent_name}, tasked with evaluating multiple AI responses.
 Analyze each response for accuracy, clarity, completeness, and relevance.
@@ -49,15 +50,13 @@ Here are the responses from different AI agents. Evaluate each one:
 
 {responses}
 
-Do NOT include a ranking for yourself ({own_agent_id}).
 Respond with your JSON rankings only."""
 
-CHAIRMAN_SYSTEM_PROMPT = """You are the Chairman, responsible for synthesizing multiple AI opinions into a final, authoritative answer.
-Consider all perspectives and rankings provided. Create a comprehensive response that:
-1. Incorporates the best insights from each agent
-2. Resolves any contradictions or disagreements
-3. Provides a clear, well-structured final answer
-4. Cites which agents contributed key insights when relevant"""
+CHAIRMAN_SYSTEM_PROMPT = """You are the Chairman.
+1. RESPOND IN THE SAME LANGUAGE AS THE USER'S QUESTION.
+2. Synthesize the provided opinions into one single, clear, and direct final answer.
+3. Do NOT explain the process or list what each agent said individually.
+4. Go straight to the point and give the best possible response."""
 
 CHAIRMAN_USER_PROMPT = """Original Question: {query}
 
@@ -345,7 +344,6 @@ class CouncilService:
         user_prompt = REVIEW_USER_PROMPT.format(
             query=query,
             responses=responses_text,
-            own_agent_id=own_agent_id,
         )
 
         start_time = datetime.now()

@@ -178,9 +178,6 @@ export function TokenUsageStats({ tokenUsage, latencyStats, reviews }: TokenUsag
                         <BarChart3 className="w-6 h-6 text-primary" />
                         <div>
                             <CardTitle className="text-xl font-serif">Token & Latency Metrics</CardTitle>
-                            <CardDescription>
-                                Total: {tokenUsage.total_tokens.toLocaleString()} tokens
-                            </CardDescription>
                         </div>
                     </div>
 

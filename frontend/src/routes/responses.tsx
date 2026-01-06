@@ -37,7 +37,6 @@ function ResponsesPage() {
         {/* Header */}
         <div>
           <h2 className="text-2xl font-bold">Model Responses & Rankings</h2>
-          <p className="text-muted-foreground">Session ID: {session.session_id}</p>
         </div>
 
         {/* Original Question */}

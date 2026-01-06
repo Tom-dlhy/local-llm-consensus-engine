@@ -154,14 +154,6 @@ function ChatPage() {
         {/* Progress and Results */}
         {session && (
           <>
-            <StageProgress
-              stage={currentStage}
-              status={status}
-              agentCount={session.agents.length}
-              opinionsCount={stageCounts.opinions}
-              reviewsCount={stageCounts.reviews}
-            />
-
             {session.final_answer && (
               <FinalAnswerCard answer={session.final_answer} />
             )}
