@@ -34,23 +34,17 @@ OPINION_SYSTEM_PROMPT = """You are {agent_name}, an expert AI assistant.
 2. Be extremely concise and direct. Avoid filler words, introductions, or excessive verbosity.
 3. Provide the answer immediately without fluff."""
 
-REVIEW_SYSTEM_PROMPT = """You are {agent_name}, tasked with evaluating multiple AI responses.
-Analyze each response for accuracy, clarity, completeness, and relevance.
-You must respond ONLY with valid JSON in the following format:
-{{
-    "rankings": [
-        {{"agent_id": "<id>", "score": <1-10>, "reasoning": "<brief explanation>"}}
-    ]
-}}
-Score from 1 (worst) to 10 (best). Be fair and objective."""
+REVIEW_SYSTEM_PROMPT = """You are {agent_name}, evaluating a single AI response.
+1. RESPOND IN THE SAME LANGUAGE AS THE QUESTION.
+2. Rate the response from 1 (poor) to 10 (excellent) based on accuracy, clarity, and relevance.
+3. Respond ONLY with JSON: {{"score": <1-10>, "reasoning": "<brief explanation>"}}"""
 
-REVIEW_USER_PROMPT = """Original Question: {query}
+REVIEW_USER_PROMPT = """Question: {query}
 
-Here are the responses from different AI agents. Evaluate each one:
+Response to evaluate:
+{response}
 
-{responses}
-
-Respond with your JSON rankings only."""
+Provide your JSON score only."""
 
 CHAIRMAN_SYSTEM_PROMPT = """You are the Chairman.
 1. RESPOND IN THE SAME LANGUAGE AS THE USER'S QUESTION.
@@ -248,7 +242,7 @@ class CouncilService:
         )
 
     # =========================================================================
-    # Stage 2: Review & Ranking
+    # Stage 2: Review & Ranking (Pairwise)
     # =========================================================================
 
     async def stage2_review(
@@ -257,49 +251,53 @@ class CouncilService:
         *,
         worker_url: str | None = None,
     ) -> list[ReviewResult]:
-        """Perform peer review of all opinions.
+        """Perform peer review using pairwise evaluations.
 
-        Each agent reviews and ranks the responses of all other agents.
-        Uses JSON mode for structured output.
+        Each agent evaluates each other agent's response individually.
+        For n agents, this creates n*(n-1) parallel LLM calls.
 
         Args:
             session: The council session
             worker_url: URL of the worker service (for master mode)
 
         Returns:
-            List of review results
+            List of review results (one per reviewer)
         """
         session.update_stage(SessionStage.REVIEW)
-        logger.info(f"Stage 2: Peer review by {len(session.agents)} agents")
+        n = len(session.agents)
+        total_evals = n * (n - 1)
+        logger.info(f"Stage 2: Pairwise review - {total_evals} evaluations for {n} agents")
 
-        tasks = []
-        for i, agent in enumerate(session.agents):
+        # Build all pairwise evaluation tasks
+        pairwise_tasks: list[tuple[str, str, str, asyncio.Task]] = []
+        
+        for i, reviewer in enumerate(session.agents):
             reviewer_id = f"agent_{i + 1}"
-            # Format opinions EXCLUDING this reviewer's own opinion
-            responses_text = self._format_opinions_for_review(
-                session.opinions, exclude_agent_id=reviewer_id
-            )
-            # Each agent reviews others (excluding self)
-            task = self._generate_review(
-                reviewer_id=reviewer_id,
-                reviewer_name=agent.name,
-                model=agent.model,
-                query=session.query,
-                responses_text=responses_text,
-                own_agent_id=reviewer_id,
-                worker_url=worker_url,
-            )
-            tasks.append(task)
+            
+            for j, target in enumerate(session.agents):
+                if i == j:
+                    continue  # Skip self-evaluation
+                
+                target_id = f"agent_{j + 1}"
+                target_opinion = session.opinions[j]
+                
+                task = self._generate_pairwise_review(
+                    reviewer_id=reviewer_id,
+                    reviewer_name=reviewer.name,
+                    model=reviewer.model,
+                    query=session.query,
+                    target_id=target_id,
+                    target_response=target_opinion.content,
+                    worker_url=worker_url,
+                )
+                pairwise_tasks.append((reviewer_id, reviewer.name, reviewer.model, task))
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Execute ALL pairwise evaluations in parallel
+        tasks_only = [t[3] for t in pairwise_tasks]
+        results = await asyncio.gather(*tasks_only, return_exceptions=True)
 
-        reviews = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.error(f"Review by agent {i + 1} failed: {result}")
-            else:
-                reviews.append(result)
-
+        # Aggregate results by reviewer
+        reviews = self._aggregate_pairwise_results(pairwise_tasks, results)
         session.reviews = reviews
 
         # Calculate token usage for Stage 2
@@ -319,31 +317,34 @@ class CouncilService:
         session.updated_at = datetime.now()
         return reviews
 
-    def _format_opinions_for_review(
-        self, opinions: list[AgentResponse], exclude_agent_id: str | None = None
-    ) -> str:
-        """Format opinions for the review prompt, optionally excluding one agent."""
-        parts = []
-        for op in opinions:
-            if op.agent_id != exclude_agent_id:
-                parts.append(f"[{op.agent_id}]:\n{op.content}\n")
-        return "\n---\n".join(parts)
-
-    async def _generate_review(
+    async def _generate_pairwise_review(
         self,
         reviewer_id: str,
         reviewer_name: str,
         model: str,
         query: str,
-        responses_text: str,
-        own_agent_id: str,
+        target_id: str,
+        target_response: str,
         worker_url: str | None = None,
-    ) -> ReviewResult:
-        """Generate a single agent's review."""
+    ) -> dict[str, Any]:
+        """Generate a single pairwise evaluation.
+
+        Args:
+            reviewer_id: ID of the reviewing agent
+            reviewer_name: Name of the reviewing agent
+            model: Model to use for review
+            query: Original user query
+            target_id: ID of the agent being evaluated
+            target_response: The response content to evaluate
+            worker_url: Worker URL (if in master mode)
+
+        Returns:
+            Dict with target_id, score, reasoning, tokens, and duration
+        """
         system_prompt = REVIEW_SYSTEM_PROMPT.format(agent_name=reviewer_name)
         user_prompt = REVIEW_USER_PROMPT.format(
             query=query,
-            responses=responses_text,
+            response=target_response,
         )
 
         start_time = datetime.now()
@@ -370,51 +371,100 @@ class CouncilService:
             prompt_tokens = response.get("prompt_eval_count", 0)
             completion_tokens = response.get("eval_count", 0)
 
-        # Parse JSON response
-        rankings = self._parse_review_response(raw_content, own_agent_id)
-
+        # Parse atomic JSON response
+        score, reasoning = self._parse_pairwise_response(raw_content)
         duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
 
-        return ReviewResult(
-            reviewer_id=reviewer_id,
-            reviewer_name=reviewer_name,
-            model=model,
-            rankings=rankings,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            duration_ms=duration_ms,
-        )
+        return {
+            "reviewer_id": reviewer_id,
+            "target_id": target_id,
+            "score": score,
+            "reasoning": reasoning,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "duration_ms": duration_ms,
+            "model": model,
+        }
 
-    def _parse_review_response(
-        self, response_text: str, own_agent_id: str
-    ) -> list[ReviewRanking]:
-        """Parse the JSON review response."""
+    def _parse_pairwise_response(self, response_text: str) -> tuple[int, str]:
+        """Parse atomic JSON: {"score": X, "reasoning": "..."}.
+
+        Args:
+            response_text: Raw JSON string from LLM
+
+        Returns:
+            Tuple of (score, reasoning)
+        """
         import json
 
         try:
             data = json.loads(response_text)
-            rankings = []
+            score = max(1, min(10, int(data.get("score", 5))))
+            reasoning = str(data.get("reasoning", "No reasoning provided"))
+            return score, reasoning
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to parse pairwise review JSON: {e}")
+            return 5, "Parse error - defaulting to neutral score"
 
-            for item in data.get("rankings", []):
-                # Skip self-review (normalize for safety)
-                ranked_id = str(item.get("agent_id", "")).strip().lower()
-                clean_own_id = str(own_agent_id).strip().lower()
-                if ranked_id == clean_own_id or ranked_id in clean_own_id:
-                     continue
+    def _aggregate_pairwise_results(
+        self,
+        task_metadata: list[tuple[str, str, str, Any]],
+        results: list[Any],
+    ) -> list[ReviewResult]:
+        """Aggregate pairwise evaluation results by reviewer.
 
-                rankings.append(
-                    ReviewRanking(
-                        agent_id=item.get("agent_id", "unknown"),
-                        score=max(1, min(10, int(item.get("score", 5)))),
-                        reasoning=item.get("reasoning", "No reasoning provided"),
-                    )
+        Groups all individual evaluations by reviewer_id and creates
+        ReviewResult objects compatible with the existing data model.
+
+        Args:
+            task_metadata: List of (reviewer_id, reviewer_name, model, task) tuples
+            results: Results from asyncio.gather (may include exceptions)
+
+        Returns:
+            List of ReviewResult objects, one per reviewer
+        """
+        # Group results by reviewer
+        grouped: dict[str, dict[str, Any]] = {}
+
+        for (reviewer_id, reviewer_name, model, _), result in zip(task_metadata, results):
+            if isinstance(result, Exception):
+                logger.warning(f"Pairwise review by {reviewer_id} failed: {result}")
+                continue
+
+            if reviewer_id not in grouped:
+                grouped[reviewer_id] = {
+                    "reviewer_name": reviewer_name,
+                    "model": model,
+                    "rankings": [],
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "duration_ms": 0,
+                }
+
+            grouped[reviewer_id]["rankings"].append(
+                ReviewRanking(
+                    agent_id=result["target_id"],
+                    score=result["score"],
+                    reasoning=result["reasoning"],
                 )
+            )
+            grouped[reviewer_id]["prompt_tokens"] += result["prompt_tokens"]
+            grouped[reviewer_id]["completion_tokens"] += result["completion_tokens"]
+            grouped[reviewer_id]["duration_ms"] += result["duration_ms"]
 
-            return rankings
-
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            logger.warning(f"Failed to parse review JSON: {e}")
-            return []
+        # Convert to ReviewResult list
+        return [
+            ReviewResult(
+                reviewer_id=rid,
+                reviewer_name=data["reviewer_name"],
+                model=data["model"],
+                rankings=data["rankings"],
+                prompt_tokens=data["prompt_tokens"],
+                completion_tokens=data["completion_tokens"],
+                duration_ms=data["duration_ms"],
+            )
+            for rid, data in grouped.items()
+        ]
 
     # =========================================================================
     # Stage 3: Chairman Synthesis
