@@ -8,8 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Role(str, Enum):
     """Service role in the distributed architecture."""
 
-    MASTER = "master"  # PC1: Orchestration + Chairman
-    WORKER = "worker"  # PC2: LLM Inference
+    MASTER = "master"
+    WORKER = "worker"
 
 
 class Settings(BaseSettings):

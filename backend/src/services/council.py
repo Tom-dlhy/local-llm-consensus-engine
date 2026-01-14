@@ -141,7 +141,6 @@ class CouncilService:
             )
             tasks.append(task)
 
-        # Execute all opinion requests in parallel
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         opinions = []
@@ -268,7 +267,6 @@ class CouncilService:
         total_evals = n * (n - 1)
         logger.info(f"Stage 2: Pairwise review - {total_evals} evaluations for {n} agents")
 
-        # Build all pairwise evaluation tasks
         pairwise_tasks: list[tuple[str, str, str, asyncio.Task]] = []
         
         for i, reviewer in enumerate(session.agents):
@@ -276,7 +274,7 @@ class CouncilService:
             
             for j, target in enumerate(session.agents):
                 if i == j:
-                    continue  # Skip self-evaluation
+                    continue
                 
                 target_id = f"agent_{j + 1}"
                 target_opinion = session.opinions[j]
@@ -371,7 +369,6 @@ class CouncilService:
             prompt_tokens = response.get("prompt_eval_count", 0)
             completion_tokens = response.get("eval_count", 0)
 
-        # Parse atomic JSON response
         score, reasoning = self._parse_pairwise_response(raw_content)
         duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
 
@@ -452,7 +449,6 @@ class CouncilService:
             grouped[reviewer_id]["completion_tokens"] += result["completion_tokens"]
             grouped[reviewer_id]["duration_ms"] += result["duration_ms"]
 
-        # Convert to ReviewResult list
         return [
             ReviewResult(
                 reviewer_id=rid,
@@ -513,7 +509,6 @@ class CouncilService:
         prompt_tokens = response.get("prompt_eval_count", 0)
         completion_tokens = response.get("eval_count", 0)
 
-        # Identify top-ranked agents
         top_agents = self._get_top_ranked_agents(session.reviews)
 
         final_answer = FinalAnswer(
@@ -526,7 +521,6 @@ class CouncilService:
 
         session.final_answer = final_answer
 
-        # Calculate token usage for Stage 3
         session.token_usage.stage3_synthesis = StageTokenUsage(
             stage="synthesis",
             total_prompt_tokens=prompt_tokens,
@@ -570,7 +564,6 @@ class CouncilService:
                     scores[ranking.agent_id] = []
                 scores[ranking.agent_id].append(ranking.score)
 
-        # Calculate averages
         parts = []
         for agent_id, score_list in sorted(scores.items()):
             avg = sum(score_list) / len(score_list) if score_list else 0
@@ -587,7 +580,6 @@ class CouncilService:
                     scores[ranking.agent_id] = []
                 scores[ranking.agent_id].append(ranking.score)
 
-        # Calculate averages and sort
         averages = [
             (agent_id, sum(s) / len(s)) for agent_id, s in scores.items() if s
         ]

@@ -31,35 +31,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url="/redoc",
     )
 
-    # CORS middleware for frontend
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure appropriately for production
+        allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    # Import and register routes based on role
     from src.api import health_router
 
     app.include_router(health_router)
 
     if settings.is_worker:
-        # Worker mode: expose generation endpoints
         from src.api import worker_router
 
         app.include_router(worker_router)
         logging.info("Worker mode: /api/generate endpoints enabled")
 
     if settings.is_master:
-        # Master mode: expose council orchestration endpoints
         from src.api import council_router
 
         app.include_router(council_router)
         logging.info("Master mode: /api/council endpoints enabled")
 
-    # Startup event
     @app.on_event("startup")
     async def startup_event():
         logging.info(
